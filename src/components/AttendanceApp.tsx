@@ -378,116 +378,120 @@ export const AttendanceApp: React.FC<AttendanceAppProps> = ({
   const dateString = `${dayName}, ${String(currentTime.getDate()).padStart(2, '0')}/${String(currentTime.getMonth() + 1).padStart(2, '0')}/${currentTime.getFullYear()}`;
   const timeString = `${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}:${String(currentTime.getSeconds()).padStart(2, '0')}`;
 
-  const [showSimModal, setShowSimModal] = useState(false);
-
   return (
-    <div className="w-full space-y-3">
-      {/* HEADER: EMERALD EMPLOYEE PROFILE BANNER */}
-      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 p-4 rounded-3xl text-white shadow-md shadow-emerald-700/10">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-white/20 rounded-2xl flex items-center justify-center font-bold text-sm backdrop-blur-xs border border-white/20">
-              {selectedEmployee?.name
-                ? selectedEmployee.name.split(' ').map((n) => n[0]).slice(-2).join('').toUpperCase()
-                : 'NV'}
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h3 className="text-sm font-bold tracking-tight leading-tight">
-                  {selectedEmployee?.name || 'Nhân viên'}
-                </h3>
-                <span className="w-2 h-2 bg-emerald-300 rounded-full animate-pulse" />
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                <p className="text-[10px] text-emerald-100 uppercase tracking-wider font-semibold">
-                  {selectedEmployee?.id} • {selectedEmployee?.department}
-                </p>
-                {(() => {
-                  const branch = branches.find((b) => b.id === selectedEmployee?.branchId);
-                  return branch ? (
-                    <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded-md text-white font-bold inline-flex items-center gap-0.5">
-                      <Building2 className="w-2.5 h-2.5" />
-                      {branch.name}
-                    </span>
-                  ) : null;
-                })()}
-              </div>
-            </div>
-          </div>
+    <div className="w-full max-w-[400px] mx-auto space-y-4">
+      
+      {/* PHONE FRAME CONTAINER */}
+      <div className="bg-slate-900 rounded-[44px] p-2.5 shadow-2xl border-[4px] border-slate-300 relative">
+        
+        {/* Dynamic Notch */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-6 bg-slate-900 rounded-b-2xl z-20 flex justify-center items-center">
+          <div className="w-10 h-1 bg-slate-800 rounded-full" />
+        </div>
 
-          {/* Quick Auth Actions */}
-          <div className="flex items-center gap-1">
-            {onOpenAuthModal && (
-              <button
-                type="button"
-                onClick={() => onOpenAuthModal('LOGIN')}
-                className="px-2.5 py-1.5 bg-white/15 hover:bg-white/25 rounded-xl text-[10px] font-bold transition flex items-center gap-1 cursor-pointer border border-white/15"
-                title="Đổi tài khoản"
-              >
-                <User className="w-3 h-3" />
-                <span>Đổi TK</span>
-              </button>
+        {/* INNER PHONE SCREEN */}
+        <div className="bg-white w-full rounded-[34px] overflow-hidden flex flex-col relative text-slate-800">
+          
+          {/* HEADER: EMERALD EMPLOYEE PROFILE BANNER */}
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-5 pt-8 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center font-bold text-sm backdrop-blur-xs">
+                  {selectedEmployee?.name
+                    ? selectedEmployee.name.split(' ').map((n) => n[0]).slice(-2).join('').toUpperCase()
+                    : 'NV'}
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold tracking-tight leading-tight">
+                    {selectedEmployee?.name || 'Nhân viên'}
+                  </h3>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <p className="text-[10px] text-emerald-100 uppercase tracking-wider">
+                      {selectedEmployee?.id} • {selectedEmployee?.department}
+                    </p>
+                    {(() => {
+                      const branch = branches.find((b) => b.id === selectedEmployee?.branchId);
+                      return branch ? (
+                        <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded-full text-white font-bold inline-flex items-center gap-0.5">
+                          <Building2 className="w-2.5 h-2.5" />
+                          {branch.name}
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Auth Actions */}
+              <div className="flex items-center gap-1.5">
+                {onOpenAuthModal && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenAuthModal('LOGIN')}
+                    className="px-2 py-1 bg-white/15 hover:bg-white/25 rounded-lg text-[10px] font-semibold transition cursor-pointer"
+                    title="Đổi tài khoản"
+                  >
+                    Đổi TK
+                  </button>
+                )}
+                <span className="w-2.5 h-2.5 bg-emerald-300 rounded-full animate-pulse" title="Online" />
+              </div>
+            </div>
+
+            {/* Mini Personal Work Hours Summary Pill */}
+            {empWorkSummary && (
+              <div className="mt-3 pt-2.5 border-t border-white/15 flex items-center justify-between text-[11px]">
+                <span className="text-emerald-100">Tổng giờ làm tích lũy:</span>
+                <span className="font-bold bg-white/20 px-2 py-0.5 rounded-full text-white font-mono">
+                  {formatHours(empWorkSummary.totalWorkHours)} ({empWorkSummary.totalShifts} ca)
+                </span>
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Mini Personal Work Hours Summary Pill */}
-        {empWorkSummary && (
-          <div className="mt-3 pt-2.5 border-t border-white/15 flex items-center justify-between text-[11px]">
-            <span className="text-emerald-100 font-medium">Giờ làm tích lũy:</span>
-            <span className="font-bold bg-white/20 px-2.5 py-0.5 rounded-lg text-white font-mono border border-white/10">
-              {formatHours(empWorkSummary.totalWorkHours)} ({empWorkSummary.totalShifts} ca)
-            </span>
-          </div>
-        )}
-      </div>
+          {/* MAIN SCROLLABLE FORM BODY */}
+          <div className="p-4 space-y-3.5 max-h-[600px] overflow-y-auto">
+            
+            {/* MINIMALIST REAL-TIME CLOCK */}
+            <div className="text-center py-2 border-b border-slate-100">
+              <h2 className="text-4xl font-light tracking-tight text-slate-700 font-mono">
+                {timeString}
+              </h2>
+              <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mt-0.5">
+                {dateString}
+              </p>
+            </div>
 
-      {/* MAIN SCROLLABLE BODY */}
-      <div className="space-y-3">
-        {/* REAL-TIME DIGITAL CLOCK CARD */}
-        <div className="bg-white rounded-3xl p-4 border border-slate-100 shadow-xs text-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full blur-2xl -mr-8 -mt-8 pointer-events-none" />
-          <h2 className="text-4xl sm:text-5xl font-light tracking-tight text-slate-800 font-mono">
-            {timeString}
-          </h2>
-          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mt-1">
-            {dateString}
-          </p>
-        </div>
-
-        {/* QUICK LINK TO WEEKLY SHIFT SCHEDULE & REGISTRATION */}
-        {onSwitchToScheduleTab && (
-          <button
-            type="button"
-            onClick={onSwitchToScheduleTab}
-            className="w-full bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 border border-emerald-200/80 p-3 rounded-2xl flex items-center justify-between text-left transition cursor-pointer shadow-xs"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-emerald-600 text-white rounded-xl flex items-center justify-center text-xs shadow-xs">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <span>{isRegistrationOpen ? 'Đang Mở Đăng Ký Ca Tuần' : 'Xem Lịch Phân Ca Tuần'}</span>
-                  {isRegistrationOpen && (
-                    <span className="text-[9px] bg-emerald-600 text-white font-bold px-1.5 py-0.2 rounded-full uppercase animate-pulse">
-                      Mở
-                    </span>
-                  )}
+            {/* QUICK LINK TO WEEKLY SHIFT SCHEDULE & REGISTRATION */}
+            {onSwitchToScheduleTab && (
+              <button
+                type="button"
+                onClick={onSwitchToScheduleTab}
+                className="w-full bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 border border-emerald-200/80 p-2.5 rounded-2xl flex items-center justify-between text-left transition cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-emerald-600 text-white rounded-xl flex items-center justify-center text-xs">
+                    <Calendar className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <span>{isRegistrationOpen ? 'Đang Mở Đăng Ký Ca Tuần' : 'Xem Lịch Phân Ca Tuần'}</span>
+                      {isRegistrationOpen && (
+                        <span className="text-[9px] bg-emerald-600 text-white font-bold px-1.5 py-0.2 rounded-full uppercase animate-pulse">
+                          Mở
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-500">T2 - CN • 3 Ca (8h-13h-18h-23h)</p>
+                  </div>
                 </div>
-                <p className="text-[10px] text-slate-500">
-                  {isRegistrationOpen ? 'Bấm để đăng ký ca T2 - CN của bạn' : 'Xem danh sách xếp ca tuần 35'}
-                </p>
-              </div>
-            </div>
-            <div className="text-[11px] font-bold text-emerald-700 flex items-center gap-0.5">
-              <span>Chi tiết</span>
-              <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
-            </div>
-          </button>
-        )}
+                <div className="text-xs font-bold text-emerald-700">
+                  {isRegistrationOpen ? 'Đăng ký &rarr;' : 'Xem lịch &rarr;'}
+                </div>
+              </button>
+            )}
 
-        {/* 3 SHIFTS SELECTOR (CA 1: 8h-13h, CA 2: 13h-18h, CA 3: 18h-23h) */}
+            {/* 3 SHIFTS SELECTOR (CA 1: 8h-13h, CA 2: 13h-18h, CA 3: 18h-23h) */}
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                 Chọn Ca Làm Việc:
@@ -750,7 +754,7 @@ export const AttendanceApp: React.FC<AttendanceAppProps> = ({
             {/* RECENT EMPLOYEE ATTENDANCE HISTORY LIST */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
               <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <span>Lịch sử gần đây ({selectedEmployee?.name?.split(' ').pop()})</span>
+                <span>Lịch sử điểm danh gần đây ({selectedEmployee?.name?.split(' ').pop()})</span>
                 <span>{employeeHistory.length} lượt</span>
               </div>
 
@@ -765,11 +769,11 @@ export const AttendanceApp: React.FC<AttendanceAppProps> = ({
                     return (
                       <div
                         key={item.id}
-                        className="bg-slate-50 hover:bg-slate-100/70 p-2.5 rounded-2xl border border-slate-100 flex items-center justify-between text-xs transition"
+                        className="bg-slate-50 hover:bg-slate-100/70 p-2 rounded-xl border border-slate-100 flex items-center justify-between text-xs transition"
                       >
                         <div className="flex items-center gap-2">
                           <span
-                            className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase ${
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
                               isCheckIn
                                 ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/50'
                                 : 'bg-slate-200/80 text-slate-700'
@@ -799,82 +803,88 @@ export const AttendanceApp: React.FC<AttendanceAppProps> = ({
                 )}
               </div>
             </div>
+
+          </div>
+
+          {/* BOTTOM HOME INDICATOR BAR */}
+          <div className="h-8 border-t border-slate-50 flex items-center justify-around px-8 bg-white">
+            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+            <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
+            <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
+          </div>
+
+        </div>
+
       </div>
 
-      {/* QUICK TESTING SIMULATION CONTROLLER (COLLAPSIBLE) */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-3.5 shadow-xs space-y-2.5">
-        <button
-          type="button"
-          onClick={() => setShowSimModal(!showSimModal)}
-          className="w-full flex items-center justify-between text-xs font-bold text-slate-700 cursor-pointer"
-        >
-          <div className="flex items-center gap-2">
-            <Laptop className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Mô Phỏng Thiết Bị & WiFi ({currentDeviceName.split(' ')[0]})</span>
+      {/* QUICK TESTING SIMULATION CONTROLLER */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+            <Laptop className="w-4 h-4 text-emerald-600" />
+            <span>Bộ Công Cụ Giả Lập Thiết Bị & WiFi</span>
           </div>
           <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-            {showSimModal ? 'Thu gọn' : 'Đổi máy/WiFi'}
+            Test Nhanh
           </span>
-        </button>
+        </div>
 
-        {showSimModal && (
-          <div className="space-y-3 pt-2 border-t border-slate-100">
-            {/* 1. Select Simulated Device */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                <span>Mô phỏng máy đang dùng (Device ID):</span>
-                <span className="text-emerald-600 font-mono">{currentDeviceId}</span>
-              </label>
-              <div className="grid grid-cols-1 gap-1">
-                {SIMULATED_DEVICES.map((dev) => (
-                  <button
-                    key={dev.id}
-                    type="button"
-                    onClick={() => handleDeviceChange(dev)}
-                    className={`p-2 rounded-xl text-left text-xs transition border flex items-center justify-between cursor-pointer ${
-                      currentDeviceId === dev.id
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
-                        : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span className="truncate pr-2">{dev.label}</span>
-                    {currentDeviceId === dev.id && (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 2. Select Simulated Network */}
-            <div className="pt-2 border-t border-slate-100">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                <span>Mô phỏng mạng ({allSimulatedNetworks.length} mạng):</span>
-                <span className="text-slate-600 font-mono">{currentWifi.ssid}</span>
-              </label>
-              <div className="grid grid-cols-1 gap-1 max-h-40 overflow-y-auto pr-0.5">
-                {allSimulatedNetworks.map((net) => (
-                  <button
-                    key={net.ssid}
-                    type="button"
-                    onClick={() => handleNetworkChange(net)}
-                    className={`p-2 rounded-xl text-left text-xs transition border flex items-center justify-between cursor-pointer ${
-                      currentWifi.ssid === net.ssid
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
-                        : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span className="truncate pr-2">{net.label}</span>
-                    {currentWifi.ssid === net.ssid && (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
+        {/* 1. Select Simulated Device */}
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+            <span>Mô phỏng máy đang dùng (Device ID):</span>
+            <span className="text-emerald-600 font-mono">{currentDeviceId}</span>
+          </label>
+          <div className="grid grid-cols-1 gap-1.5">
+            {SIMULATED_DEVICES.map((dev) => (
+              <button
+                key={dev.id}
+                type="button"
+                onClick={() => handleDeviceChange(dev)}
+                className={`p-2 rounded-xl text-left text-xs transition border flex items-center justify-between cursor-pointer ${
+                  currentDeviceId === dev.id
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
+                    : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <span className="truncate pr-2">{dev.label}</span>
+                {currentDeviceId === dev.id && (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                )}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+
+        {/* 2. Select Simulated Network */}
+        <div className="pt-2 border-t border-slate-100">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+            <span>Mô phỏng mạng kết nối ({allSimulatedNetworks.length} mạng):</span>
+            <span className="text-slate-600 font-mono">{currentWifi.ssid}</span>
+          </label>
+          <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-0.5">
+            {allSimulatedNetworks.map((net) => (
+              <button
+                key={net.ssid}
+                type="button"
+                onClick={() => handleNetworkChange(net)}
+                className={`p-2 rounded-xl text-left text-xs transition border flex items-center justify-between cursor-pointer ${
+                  currentWifi.ssid === net.ssid
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
+                    : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <span className="truncate pr-2">{net.label}</span>
+                {currentWifi.ssid === net.ssid && (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
       </div>
+
     </div>
   );
 };

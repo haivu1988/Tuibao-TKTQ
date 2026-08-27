@@ -239,37 +239,21 @@ export function runAutoScheduleAlgorithm(
 }
 
 /**
- * Generate Sample Initial Registrations for realistic preview
+ * Generate Sample Initial Registrations for realistic preview across all employees and branches
  */
 export function generateSampleRegistrations(employees: Employee[]): Record<string, ShiftRegistration> {
   const registrations: Record<string, ShiftRegistration> = {};
-  const allSlotKeys: string[] = [];
 
-  DAYS_OF_WEEK.forEach((d) => {
-    ['CA_1', 'CA_2', 'CA_3'].forEach((s) => {
-      allSlotKeys.push(getSlotKey(d.key, s));
-    });
-  });
+  const patternA = ['T2_CA_1', 'T2_CA_2', 'T3_CA_1', 'T4_CA_1', 'T4_CA_2', 'T5_CA_1', 'T6_CA_1', 'T6_CA_2', 'T7_CA_1'];
+  const patternB = ['T2_CA_2', 'T2_CA_3', 'T3_CA_2', 'T3_CA_3', 'T4_CA_2', 'T5_CA_3', 'T6_CA_2', 'T7_CA_2', 'T7_CA_3', 'CN_CA_2'];
+  const patternC = ['T2_CA_1', 'T3_CA_1', 'T3_CA_3', 'T4_CA_3', 'T5_CA_1', 'T5_CA_2', 'T6_CA_3', 'T7_CA_1', 'CN_CA_1', 'CN_CA_3'];
+  const patternD = ['T2_CA_3', 'T3_CA_2', 'T4_CA_1', 'T5_CA_2', 'T6_CA_1', 'T7_CA_2', 'CN_CA_2', 'CN_CA_3'];
+  const patternE = ['T2_CA_2', 'T3_CA_1', 'T4_CA_2', 'T5_CA_3', 'T6_CA_2', 'T7_CA_3', 'CN_CA_1', 'CN_CA_2'];
+
+  const patterns = [patternA, patternB, patternC, patternD, patternE];
 
   employees.forEach((emp, index) => {
-    // Each employee registers for ~10-14 slots across the week based on preference patterns
-    let selected: string[] = [];
-    if (index === 0) {
-      // Nguyễn Văn An prefers morning & afternoon (CA_1, CA_2) Mon-Fri
-      selected = ['T2_CA_1', 'T2_CA_2', 'T3_CA_1', 'T4_CA_1', 'T4_CA_2', 'T5_CA_1', 'T6_CA_1', 'T6_CA_2', 'T7_CA_1'];
-    } else if (index === 1) {
-      // Trần Thị Bình prefers evening & afternoon (CA_2, CA_3)
-      selected = ['T2_CA_2', 'T2_CA_3', 'T3_CA_2', 'T3_CA_3', 'T4_CA_2', 'T5_CA_3', 'T6_CA_2', 'T7_CA_2', 'T7_CA_3', 'CN_CA_2'];
-    } else if (index === 2) {
-      // Lê Hoàng Cường prefers morning & evening
-      selected = ['T2_CA_1', 'T3_CA_1', 'T3_CA_3', 'T4_CA_3', 'T5_CA_1', 'T5_CA_2', 'T6_CA_3', 'T7_CA_1', 'CN_CA_1', 'CN_CA_3'];
-    } else if (index === 3) {
-      // Phạm Minh Dũng
-      selected = ['T2_CA_3', 'T3_CA_2', 'T4_CA_1', 'T5_CA_2', 'T6_CA_1', 'T7_CA_2', 'CN_CA_2', 'CN_CA_3'];
-    } else {
-      // Hoàng Thị Giang
-      selected = ['T2_CA_2', 'T3_CA_1', 'T4_CA_2', 'T5_CA_3', 'T6_CA_2', 'T7_CA_3', 'CN_CA_1'];
-    }
+    const selected = patterns[index % patterns.length];
 
     registrations[emp.id] = {
       employeeId: emp.id,

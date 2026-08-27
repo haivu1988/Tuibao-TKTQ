@@ -47,6 +47,7 @@ interface ShiftScheduleManagerProps {
   employees: Employee[];
   shifts: Shift[];
   branches?: Branch[];
+  activeBranchId?: string;
   registrations: Record<string, ShiftRegistration>;
   scheduleConfig: ShiftScheduleConfig;
   weeklySchedule: WeeklySchedule;
@@ -60,6 +61,7 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
   employees,
   shifts,
   branches = [],
+  activeBranchId,
   registrations,
   scheduleConfig,
   weeklySchedule,
@@ -68,9 +70,8 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
   onUpdateRegistrations,
   showToast
 }) => {
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('ALL');
-  const [selectedStaffPerShift, setSelectedStaffPerShift] = useState<number>(
-    scheduleConfig.requiredStaffPerShift || 2
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(
+    activeBranchId || branches[0]?.id || 'CN_HN_01'
   );
   const [isAutoScheduling, setIsAutoScheduling] = useState(false);
   const [scheduleLogs, setScheduleLogs] = useState<string[]>([]);
@@ -78,15 +79,17 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
 
   // Manual Edit Slot Modal
   const [editingSlotKey, setEditingSlotKey] = useState<string | null>(null);
-  const [selectedEmployeeToAdd, setSelectedEmployeeToAdd] = useState<string>(employees[0]?.id || '');
+  const [selectedEmployeeToAdd, setSelectedEmployeeToAdd] = useState<string>('');
 
   // Filter or highlight view
   const [highlightEmployeeId, setHighlightEmployeeId] = useState<string>('ALL');
 
-  // Branch-filtered employees
+  // Branch-filtered employees (Strict isolation: only employees belonging to this branch)
   const displayEmployees = selectedBranchId === 'ALL'
     ? employees
     : employees.filter((e) => e.branchId === selectedBranchId);
+
+  const currentBranch = branches.find((b) => b.id === selectedBranchId);
 
   // Toggle Registration Open / Closed
   const handleToggleRegistration = () => {
@@ -111,37 +114,43 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
     }
   };
 
-  // Run Auto Schedule Algorithm (branch isolated or global)
+  // Run Auto Schedule Algorithm (Strictly 2 employees/shift, strictly within selected branch)
   const handleRunAutoSchedule = async () => {
     setIsAutoScheduling(true);
 
     // Simulate smart calculation delay
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     const targetEmployees = selectedBranchId === 'ALL'
       ? employees
       : employees.filter((e) => e.branchId === selectedBranchId);
 
+    if (targetEmployees.length === 0) {
+      showToast('warning', 'Chưa có nhân viên', 'Chi nhánh này hiện chưa có nhân viên nào để xếp ca!');
+      setIsAutoScheduling(false);
+      return;
+    }
+
+    // STRICT RULE: exactly 2 staff per shift
     const result = runAutoScheduleAlgorithm(
       targetEmployees,
       registrations,
       shifts,
-      selectedStaffPerShift,
+      2, // Strictly 2 employees per shift
       scheduleConfig.allowAutoFillIfLacking ?? true
     );
 
     const now = new Date();
     const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} - ${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
 
-    // If scheduling for specific branch, merge with existing slots for other branches
+    // Merge logic: replace assignments for this branch's employees while retaining other branches
     let mergedSlots = result.schedule;
     if (selectedBranchId !== 'ALL' && weeklySchedule?.slots) {
       mergedSlots = { ...weeklySchedule.slots };
-      // Replace slots for this branch's employees
-      const branchEmpIds = new Set(targetEmployees.map(e => e.id));
+      const branchEmpIds = new Set(targetEmployees.map((e) => e.id));
       Object.keys(result.schedule).forEach((slotKey) => {
         const existingSlot = mergedSlots[slotKey] || [];
-        const nonBranchEmployees = existingSlot.filter(id => !branchEmpIds.has(id));
+        const nonBranchEmployees = existingSlot.filter((id) => !branchEmpIds.has(id));
         const newBranchEmployees = result.schedule[slotKey] || [];
         mergedSlots[slotKey] = [...nonBranchEmployees, ...newBranchEmployees];
       });
@@ -159,12 +168,12 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
     setLastStats(result.stats);
     setIsAutoScheduling(false);
 
-    const branchName = branches.find(b => b.id === selectedBranchId)?.name || 'Tất Cả Chi Nhánh';
+    const branchName = currentBranch?.name || 'Tất Cả Chi Nhánh';
 
     showToast(
       'success',
       `Đã Tự Động Chia Ca: ${branchName}`,
-      `Đã phân bổ đều ${result.summary.filledSlots} lượt trực cho ${result.stats.length} nhân viên (Độ công bằng: ${result.summary.fairnessScore}%).`
+      `Đã chia đều 2 người/ca cho ${targetEmployees.length} nhân viên của ${currentBranch?.code || 'chi nhánh'} (Độ công bằng: ${result.summary.fairnessScore}%).`
     );
   };
 
@@ -188,11 +197,13 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
   // Open Edit Slot Modal
   const handleOpenEditSlot = (slotKey: string) => {
     setEditingSlotKey(slotKey);
-    // Default select an employee not in this slot
     const currentInSlot = weeklySchedule?.slots?.[slotKey] || [];
-    const available = employees.find((e) => !currentInSlot.includes(e.id));
+    // Only suggest available employees from the CURRENTLY SELECTED branch
+    const available = displayEmployees.find((e) => !currentInSlot.includes(e.id));
     if (available) {
       setSelectedEmployeeToAdd(available.id);
+    } else if (displayEmployees[0]) {
+      setSelectedEmployeeToAdd(displayEmployees[0].id);
     }
   };
 
@@ -237,21 +248,23 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
     showToast('info', 'Đã xóa khỏi ca', 'Đã bỏ nhân viên khỏi ca trực này.');
   };
 
-  // Count registrations
-  const totalRegisteredCount = Object.keys(registrations).length;
-  const activeEmployees = employees.filter((e) => e.active !== false);
+  // Count registrations for display employees
+  const totalRegisteredCount = displayEmployees.filter((e) => Boolean(registrations[e.id]?.selectedSlots?.length)).length;
+  const activeEmployees = displayEmployees.filter((e) => e.active !== false);
 
   // Export schedule to CSV
   const handleExportScheduleCsv = () => {
     let csv = '\uFEFF'; // UTF-8 BOM
-    csv += `LỊCH PHÂN CHIA CA LÀM VIỆC - ${scheduleConfig.weekLabel}\n`;
+    csv += `LỊCH PHÂN CHIA CA LÀM VIỆC - ${scheduleConfig.weekLabel} (${currentBranch?.name || 'Tất Cả'})\n`;
     csv += 'Ca Làm Việc,' + DAYS_OF_WEEK.map((d) => d.label).join(',') + '\n';
 
     shifts.forEach((shift) => {
       let row = `"${shift.name} (${shift.startTime}-${shift.endTime})"`;
       DAYS_OF_WEEK.forEach((day) => {
         const slotKey = getSlotKey(day.key, shift.id);
-        const assignedIds = weeklySchedule?.slots?.[slotKey] || [];
+        const assignedIds = (weeklySchedule?.slots?.[slotKey] || []).filter((id) =>
+          selectedBranchId === 'ALL' ? true : displayEmployees.some((e) => e.id === id)
+        );
         const names = assignedIds
           .map((id) => employees.find((e) => e.id === id)?.name || id)
           .join(' & ');
@@ -264,28 +277,30 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Lich_Phan_Ca_${scheduleConfig.weekLabel.replace(/\s+/g, '_')}.csv`;
+    link.download = `Lich_Phan_Ca_${(currentBranch?.code || 'ChiNhanh')}_${scheduleConfig.weekLabel.replace(/\s+/g, '_')}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     showToast('success', 'Đã tải file lịch ca', 'File CSV lịch làm việc đã được xuất thành công.');
   };
 
-  // Calculate shift stats for all employees in current schedule
+  // Calculate shift stats for display employees
   const employeeShiftCounts: Record<string, number> = {};
-  employees.forEach((e) => {
+  displayEmployees.forEach((e) => {
     employeeShiftCounts[e.id] = 0;
   });
   Object.values(weeklySchedule.slots || {}).forEach((ids) => {
     const list = Array.isArray(ids) ? ids : [];
     list.forEach((id) => {
-      employeeShiftCounts[id] = (employeeShiftCounts[id] || 0) + 1;
+      if (employeeShiftCounts[id] !== undefined) {
+        employeeShiftCounts[id] = (employeeShiftCounts[id] || 0) + 1;
+      }
     });
   });
 
   return (
     <div className="space-y-6">
       
-      {/* 1. TOP CONTROL PANEL: REGISTRATION STATE & AUTO-SCHEDULE ACTIONS */}
+      {/* 1. TOP CONTROL PANEL: PROMINENT BRANCH SELECTOR & ONE-CLICK AUTO-SCHEDULE */}
       <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-5">
         
         {/* Header Title & Registration Switch */}
@@ -296,11 +311,11 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
                 <Calendar className="w-5 h-5" />
               </span>
               <h3 className="text-xl font-bold text-slate-800 tracking-tight">
-                Hệ Thống Phân Chia Ca Làm Việc Tuần
+                Hệ Thống Phân Chia Ca Làm Việc
               </h3>
             </div>
             <p className="text-xs text-slate-500">
-              Quản lý đăng ký ca nguyện vọng của nhân viên và tự động xếp ca công bằng theo thuật toán thông minh
+              Quản lý đăng ký ca và tự động chia ca biệt lập theo từng chi nhánh đang chọn (Quy chuẩn 2 nhân viên / ca)
             </p>
           </div>
 
@@ -318,12 +333,12 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
               {scheduleConfig.isRegistrationOpen ? (
                 <>
                   <Unlock className="w-4 h-4" />
-                  <span>Đang MỞ Đăng Ký (Bấm để Đóng)</span>
+                  <span>Đang MỞ Đăng Ký</span>
                 </>
               ) : (
                 <>
                   <Lock className="w-4 h-4" />
-                  <span>Đang ĐÓNG Đăng Ký (Bấm để Mở)</span>
+                  <span>Đang ĐÓNG Đăng Ký</span>
                 </>
               )}
             </button>
@@ -353,97 +368,77 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
           </div>
         </div>
 
-        {/* 2. AUTO-SCHEDULE ALGORITHM TRIGGER & RULES CARD */}
-        <div className="bg-gradient-to-br from-slate-50 to-blue-50/50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4">
+        {/* 2. PROMINENT BRANCH SELECTOR & AUTO-SCHEDULE ACTION (CLEAN, NO RULES BOX) */}
+        <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             
-            {/* Rules Summary Pill */}
-            <div className="space-y-1.5 max-w-2xl">
+            {/* Active Branch Pills Selector */}
+            <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-blue-600" />
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                  Quy Tắc Tự Động Chia Ca Thông Minh:
+                <Building2 className="w-4 h-4 text-indigo-600" />
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                  Chọn Chi Nhánh Để Phân Ca & Quản Lý:
                 </span>
               </div>
-              <ul className="text-xs text-slate-600 space-y-1 font-medium pl-1">
-                <li className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0" />
-                  <span><strong>Quy tắc 1:</strong> Tuyệt đối <strong>KHÔNG</strong> chia 1 nhân viên làm 3 ca trong 1 ngày (Tối đa 2 ca).</span>
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0" />
-                  <span><strong>Quy tắc 2:</strong> <strong>Hạn chế tối đa</strong> việc 1 người làm 2 ca/ngày (ưu tiên người chưa có ca trong ngày).</span>
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0" />
-                  <span><strong>Quy tắc 3:</strong> Số ca làm việc của các nhân viên được cân bằng <strong>"same same nhau"</strong> theo tuần.</span>
-                </li>
-              </ul>
-            </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {branches.map((b) => {
+                  const isSelected = selectedBranchId === b.id;
+                  const count = employees.filter((e) => e.branchId === b.id).length;
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setSelectedBranchId(b.id)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 ring-2 ring-indigo-600 ring-offset-1'
+                          : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                      }`}
+                    >
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>{b.name.split('(')[0].trim()}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                        isSelected ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {count} NV
+                      </span>
+                    </button>
+                  );
+                })}
 
-            {/* Target Capacity & Action */}
-            <div className="flex flex-wrap items-center gap-3 shrink-0">
-              {branches.length > 0 && (
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <Building2 className="w-3 h-3 text-indigo-600" />
-                    <span>Cụm Chi Nhánh:</span>
-                  </label>
-                  <select
-                    value={selectedBranchId}
-                    onChange={(e) => setSelectedBranchId(e.target.value)}
-                    className="bg-white border border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold text-indigo-900 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs"
-                  >
-                    <option value="ALL">🏢 Toàn bộ chi nhánh ({employees.length} NV)</option>
-                    {branches.map((b) => {
-                      const count = employees.filter((e) => e.branchId === b.id).length;
-                      return (
-                        <option key={b.id} value={b.id}>
-                          {b.name} ({count} NV)
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  Số người / 1 Ca:
-                </label>
-                <select
-                  value={selectedStaffPerShift}
-                  onChange={(e) => setSelectedStaffPerShift(Number(e.target.value))}
-                  className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                >
-                  <option value={1}>1 Nhân viên / Ca</option>
-                  <option value={2}>2 Nhân viên / Ca (Chuẩn)</option>
-                  <option value={3}>3 Nhân viên / Ca</option>
-                  <option value={4}>4 Nhân viên / Ca</option>
-                </select>
-              </div>
-
-              <div className="pt-4">
                 <button
                   type="button"
-                  onClick={handleRunAutoSchedule}
-                  disabled={isAutoScheduling}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md shadow-blue-600/20 cursor-pointer"
+                  onClick={() => setSelectedBranchId('ALL')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                    selectedBranchId === 'ALL'
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
                 >
-                  {isAutoScheduling ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4" />
-                  )}
-                  <span>
-                    {isAutoScheduling
-                      ? 'Đang Xếp Ca...'
-                      : selectedBranchId === 'ALL'
-                      ? 'Tự Động Chia Ca Tất Cả'
-                      : `Chia Ca: ${branches.find(b => b.id === selectedBranchId)?.code || 'Chi Nhánh'}`}
-                  </span>
+                  <span>Toàn bộ ({employees.length} NV)</span>
                 </button>
               </div>
+            </div>
+
+            {/* Auto Schedule Action Button */}
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={handleRunAutoSchedule}
+                disabled={isAutoScheduling}
+                className="px-5 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 text-white rounded-2xl text-xs font-bold transition flex items-center gap-2 shadow-md shadow-blue-600/20 cursor-pointer"
+              >
+                {isAutoScheduling ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                <span>
+                  {isAutoScheduling
+                    ? 'Đang Tự Động Xếp Ca...'
+                    : `⚡ Tự Động Chia Ca: ${currentBranch?.name.split('(')[0].trim() || 'Tất Cả'} (2 NV / Ca)`}
+                </span>
+              </button>
             </div>
 
           </div>
@@ -453,7 +448,7 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
             <div className="flex items-center gap-2 text-slate-600">
               <UserCheck className="w-4 h-4 text-emerald-600" />
               <span>
-                Tiến độ đăng ký: <strong>{totalRegisteredCount} / {activeEmployees.length}</strong> nhân viên đã gửi nguyện vọng ca.
+                Tiến độ chi nhánh {currentBranch?.code || 'chọn'}: <strong>{totalRegisteredCount} / {activeEmployees.length}</strong> nhân viên đã gửi nguyện vọng ca.
               </span>
             </div>
 
@@ -464,7 +459,7 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
                 className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
               >
                 <Download className="w-3.5 h-3.5 text-slate-500" />
-                <span>Xuất CSV Lịch Ca</span>
+                <span>Xuất CSV Lịch Ca ({currentBranch?.code || 'Chi Nhánh'})</span>
               </button>
             </div>
           </div>
@@ -480,14 +475,14 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h4 className="text-lg font-bold text-slate-800">
-                Bảng Phân Chia Ca Tuần (Ma Trận Trực Quan)
+                Bảng Phân Chia Ca Tuần — {currentBranch?.name || 'Tất Cả Chi Nhánh'}
               </h4>
               <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                 {scheduleConfig.weekLabel}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              💡 Bấm vào bất kỳ ô ca nào để <strong>chỉnh sửa, thêm/bớt nhân viên trực</strong> thủ công.
+              💡 Mỗi ca phân bổ đúng 2 nhân viên của chi nhánh. Bấm vào ô bất kỳ để chỉnh sửa hoặc thêm/bớt nhân viên trực.
             </p>
           </div>
 
@@ -499,7 +494,7 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
               onChange={(e) => setHighlightEmployeeId(e.target.value)}
               className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-700 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="ALL">Tất cả nhân viên ({displayEmployees.length})</option>
+              <option value="ALL">Tất cả nhân viên chi nhánh ({displayEmployees.length})</option>
               {displayEmployees.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.name} ({e.id} - {employeeShiftCounts[e.id] || 0} ca)
@@ -548,15 +543,20 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
                   {/* 7 Days Columns for this Shift */}
                   {DAYS_OF_WEEK.map((day) => {
                     const slotKey = getSlotKey(day.key, shift.id);
-                    const assignedEmpIds = weeklySchedule?.slots?.[slotKey] || [];
-                    const isLacking = assignedEmpIds.length < selectedStaffPerShift;
+                    const allAssignedEmpIds = weeklySchedule?.slots?.[slotKey] || [];
+                    // Filter to only display employees of the selected branch
+                    const assignedEmpIds = selectedBranchId === 'ALL'
+                      ? allAssignedEmpIds
+                      : allAssignedEmpIds.filter((id) => displayEmployees.some((e) => e.id === id));
+                    
+                    const isLacking = assignedEmpIds.length < 2;
 
                     return (
                       <td
                         key={day.key}
                         onClick={() => handleOpenEditSlot(slotKey)}
                         className={`p-2.5 border-r border-slate-200 align-top hover:bg-blue-50/40 cursor-pointer transition relative group ${
-                          isLacking ? 'bg-amber-50/30' : ''
+                          isLacking && assignedEmpIds.length > 0 ? 'bg-amber-50/30' : ''
                         }`}
                       >
                         {/* Edit Quick Icon on Hover */}
@@ -590,7 +590,7 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
                                 >
                                   <div className="truncate pr-1">
                                     <span className="font-bold">{emp?.name || empId}</span>
-                                    {empBranch && (
+                                    {empBranch && selectedBranchId === 'ALL' && (
                                       <span className={`text-[8px] px-1 py-0.2 rounded ml-1 font-bold ${
                                         isHighlighted ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-700'
                                       }`}>
@@ -606,10 +606,10 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
                             })
                           )}
 
-                          {isLacking && (
+                          {assignedEmpIds.length > 0 && isLacking && (
                             <div className="text-[9px] text-amber-700 font-semibold flex items-center gap-1 pt-0.5">
                               <AlertTriangle className="w-2.5 h-2.5" />
-                              <span>Thiếu người ({assignedEmpIds.length}/{selectedStaffPerShift})</span>
+                              <span>1/2 người</span>
                             </div>
                           )}
                         </div>
@@ -625,13 +625,13 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
 
       </div>
 
-      {/* 4. FAIRNESS SUMMARY: SHIFT DISTRIBUTION EQUALITY TABLE */}
+      {/* 4. FAIRNESS SUMMARY: SHIFT DISTRIBUTION EQUALITY TABLE FOR SELECTED BRANCH */}
       <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-              Thống Kê Phân Bổ Ca Của Từng Nhân Viên (Kiểm Tra Độ Cân Bằng "Same Same")
+              Thống Kê Ca Của Nhân Viên — {currentBranch?.name || 'Tất Cả'}
             </h4>
           </div>
           <span className="text-xs text-slate-500">
@@ -683,7 +683,7 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
               <div>
                 <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
                   <Edit3 className="w-4 h-4 text-blue-600" />
-                  <span>Chỉnh Sửa Ca Trực Thủ Công</span>
+                  <span>Chỉnh Sửa Ca Trực — {currentBranch?.code || 'Chi Nhánh'}</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {(() => {
@@ -703,48 +703,52 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
               </button>
             </div>
 
-            {/* Current Staff in this slot */}
+            {/* Current Staff in this slot (filtered to selected branch) */}
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Nhân viên đang phân trong ca này:
               </label>
 
               <div className="space-y-1.5">
-                {(weeklySchedule?.slots?.[editingSlotKey] || []).length === 0 ? (
+                {(weeklySchedule?.slots?.[editingSlotKey] || []).filter((id) =>
+                  selectedBranchId === 'ALL' ? true : displayEmployees.some((e) => e.id === id)
+                ).length === 0 ? (
                   <p className="text-xs text-slate-400 py-2 italic text-center bg-slate-50 rounded-xl">
                     Chưa có nhân viên nào trong ca này.
                   </p>
                 ) : (
-                  (weeklySchedule?.slots?.[editingSlotKey] || []).map((empId) => {
-                    const emp = employees.find((e) => e.id === empId);
-                    return (
-                      <div
-                        key={empId}
-                        className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs"
-                      >
-                        <div>
-                          <p className="font-bold text-slate-800">{emp?.name || empId}</p>
-                          <p className="text-[10px] text-slate-500 font-mono">{empId} • {emp?.department}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveEmployeeFromSlot(empId)}
-                          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                          title="Xóa khỏi ca này"
+                  (weeklySchedule?.slots?.[editingSlotKey] || [])
+                    .filter((id) => (selectedBranchId === 'ALL' ? true : displayEmployees.some((e) => e.id === id)))
+                    .map((empId) => {
+                      const emp = employees.find((e) => e.id === empId);
+                      return (
+                        <div
+                          key={empId}
+                          className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })
+                          <div>
+                            <p className="font-bold text-slate-800">{emp?.name || empId}</p>
+                            <p className="text-[10px] text-slate-500 font-mono">{empId} • {emp?.department}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveEmployeeFromSlot(empId)}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title="Xóa khỏi ca này"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })
                 )}
               </div>
             </div>
 
-            {/* Add Employee to this slot */}
+            {/* Add Employee to this slot (strictly within the selected branch) */}
             <div className="space-y-2 pt-3 border-t border-slate-100">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Thêm nhân viên khác vào ca này:
+                Thêm nhân viên {currentBranch?.name.split('(')[0].trim() || ''} vào ca:
               </label>
 
               <div className="flex gap-2">
@@ -753,9 +757,9 @@ export const ShiftScheduleManager: React.FC<ShiftScheduleManagerProps> = ({
                   onChange={(e) => setSelectedEmployeeToAdd(e.target.value)}
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                 >
-                  {employees.map((emp) => (
+                  {displayEmployees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.id} - Đang có {employeeShiftCounts[emp.id] || 0} ca)
+                      {emp.name} ({emp.id} - {employeeShiftCounts[emp.id] || 0} ca)
                     </option>
                   ))}
                 </select>
