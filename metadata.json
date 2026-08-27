@@ -1,0 +1,6 @@
+{
+  "name": "Hệ Thống Chấm Công Nhân Sự Google Apps Script",
+  "description": "Hệ thống chấm công, phân chia cụm chi nhánh độc lập và tự động xếp ca làm việc 3 ca (8h-13h, 13h-18h, 18h-23h) cho nhân viên và quản lý: đăng nhập chọn chi nhánh, quản lý từng cụm chi nhánh tách biệt, đăng ký ca từ Thứ 2 đến CN, thuật toán tự động chia ca công bằng và xuất báo cáo.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
